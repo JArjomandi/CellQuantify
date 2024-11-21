@@ -8,18 +8,23 @@ import matplotlib.pyplot as plt
 def analyze_image(image_path):
     # Load image
     img = cv2.imread(image_path, cv2.IMREAD_COLOR)
+    image_area = img.shape[0] * img.shape[1]  # Total area in pixels
 
     # Split the channels (assuming BGR format)
     blue_channel = img[:, :, 0]
     green_channel = img[:, :, 1]
     red_channel = img[:, :, 2]
 
-    # Detect blue cells
+    # Detect blue cells (original method)
     blue_threshold = filters.threshold_otsu(blue_channel)
     blue_cells_mask = blue_channel > blue_threshold
-    blue_cells_mask = morphology.remove_small_objects(blue_cells_mask, min_size=70)
+    blue_cells_mask = morphology.remove_small_objects(blue_cells_mask, min_size=60)
     labeled_blue_cells, num_blue_cells = measure.label(blue_cells_mask, return_num=True)
     blue_cells_props = measure.regionprops(labeled_blue_cells, intensity_image=blue_channel)
+
+    # Calculate total area of blue cells
+    total_blue_area_pixels = np.sum([prop.area for prop in blue_cells_props])
+    total_blue_area_percent = (total_blue_area_pixels / image_area) * 100
 
     # Define acceptable red intensity range around #bf0006
     min_red_intensity = 100  # Lower bound
@@ -50,6 +55,10 @@ def analyze_image(image_path):
     red_aggregates_diameters = [prop.equivalent_diameter for prop in red_aggregates_props]
     num_red_aggregates = len(red_aggregates_diameters)
 
+    # Calculate total area of red aggregates
+    total_red_area_pixels = np.sum([prop.area for prop in red_aggregates_props])
+    total_red_area_percent = (total_red_area_pixels / image_area) * 100
+
     # Plot the original image with detections
     fig, ax = plt.subplots(figsize=(8, 8))
     ax.imshow(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
@@ -75,7 +84,11 @@ def analyze_image(image_path):
 
     # Print results
     print(f"Number of blue cells: {num_blue_cells}")
+    print(f"Total blue cell area (pixels): {total_blue_area_pixels}")
+    print(f"Total blue cell area (% of image): {total_blue_area_percent:.2f}%")
     print(f"Number of red aggregates: {num_red_aggregates}")
+    print(f"Total red aggregate area (pixels): {total_red_area_pixels}")
+    print(f"Total red aggregate area (% of image): {total_red_area_percent:.2f}%")
     print("Diameters of red aggregates:", red_aggregates_diameters)
 
 # Run the analysis on your .tif images
