@@ -25,14 +25,26 @@ def analyze_image(image_path):
     min_red_intensity = 191
 
     # Create a mask for red aggregates based on specific color criteria
-    red_aggregates_mask = (
-            (red_channel >= min_red_intensity) &  # Red intensity threshold
+    # Apply a lower threshold to capture smaller, fainter aggregates
+    red_aggregates_mask_low = (
+            (red_channel >= min_red_intensity * 0.8) &  # Lower red intensity threshold
             (red_channel > green_channel * 1.5) &  # Red significantly stronger than green
             (red_channel > blue_channel * 1.5)  # Red significantly stronger than blue
     )
 
+    # Apply a stricter threshold to capture only very bright aggregates
+    red_aggregates_mask_high = (
+            (red_channel >= min_red_intensity) &  # Higher red intensity threshold
+            (red_channel > green_channel * 1.5) &  # Red significantly stronger than green
+            (red_channel > blue_channel * 1.5)  # Red significantly stronger than blue
+    )
+
+    # Combine the two masks
+    red_aggregates_mask = red_aggregates_mask_low | red_aggregates_mask_high
+
     # Apply morphology to refine the mask
-    red_aggregates_mask = morphology.remove_small_objects(red_aggregates_mask, min_size=5)
+    red_aggregates_mask = morphology.binary_opening(red_aggregates_mask, morphology.disk(1))
+    red_aggregates_mask = morphology.binary_closing(red_aggregates_mask, morphology.disk(1))
 
     # Distance transform for watershed segmentation
     distance = ndi.distance_transform_edt(red_aggregates_mask)
