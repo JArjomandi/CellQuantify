@@ -1,10 +1,9 @@
 import cv2
 import numpy as np
-from skimage import measure, morphology
+from skimage import measure, morphology, filters
 from skimage.segmentation import watershed
 from scipy import ndimage as ndi
 import matplotlib.pyplot as plt
-
 
 def analyze_image(image_path):
     # Load image
@@ -18,19 +17,20 @@ def analyze_image(image_path):
     # Detect blue cells
     blue_threshold = filters.threshold_otsu(blue_channel)
     blue_cells_mask = blue_channel > blue_threshold
-    blue_cells_mask = morphology.remove_small_objects(blue_cells_mask, min_size=50)
+    blue_cells_mask = morphology.remove_small_objects(blue_cells_mask, min_size=70)
     labeled_blue_cells, num_blue_cells = measure.label(blue_cells_mask, return_num=True)
+    blue_cells_props = measure.regionprops(labeled_blue_cells, intensity_image=blue_channel)
 
     # Define acceptable red intensity range around #bf0006
-    min_red_intensity = 150  # Lower bound
+    min_red_intensity = 100  # Lower bound
     max_red_intensity = 255  # Upper bound for bright red tones
 
     # Create a mask for red aggregates within the acceptable intensity range
     red_aggregates_mask = (
-            (red_channel >= min_red_intensity) &
-            (red_channel <= max_red_intensity) &
-            (red_channel > green_channel * 1.5) &
-            (red_channel > blue_channel * 1.5)
+        (red_channel >= min_red_intensity) &
+        (red_channel <= max_red_intensity) &
+        (red_channel > green_channel * 1.5) &
+        (red_channel > blue_channel * 1.5)
     )
 
     # Apply morphology to refine the mask
@@ -54,6 +54,13 @@ def analyze_image(image_path):
     fig, ax = plt.subplots(figsize=(8, 8))
     ax.imshow(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
 
+    # Draw circles around each blue cell
+    for prop in blue_cells_props:
+        y, x = prop.centroid
+        diameter = prop.equivalent_diameter / 2
+        circle = plt.Circle((x, y), diameter, color='green', fill=False, linewidth=1)
+        ax.add_patch(circle)
+
     # Draw circles around each red aggregate
     for prop in red_aggregates_props:
         y, x = prop.centroid
@@ -71,6 +78,8 @@ def analyze_image(image_path):
     print(f"Number of red aggregates: {num_red_aggregates}")
     print("Diameters of red aggregates:", red_aggregates_diameters)
 
-
-# Run the analysis on your .tif image
-analyze_image("path_to_image.tif")
+# Run the analysis on your .tif images
+analyze_image("E:\\MSc\\FAU\\LESSONS masters\\Master Project\\MN lab training\\2024-10-09 Thy1 no3-CTSB 488_LB509 568_MJFR14 647-CSTB_PBS- 5_c2+4.tif")
+analyze_image("E:\\MSc\\FAU\\LESSONS masters\\Master Project\\MN lab training\\2024-10-09 Thy1 no4-CTSB 488_LB509 568_MJFR14 647-CSTB 2_c2+4.tif")
+analyze_image("E:\\MSc\\FAU\\LESSONS masters\\Master Project\\MN lab training\\2024-10-09 Thy1 no4-CTSB 488_LB509 568_MJFR14 647-CSTB 2_c2.tif")
+analyze_image("E:\\MSc\\FAU\\LESSONS masters\\Master Project\\MN lab training\\2024-10-09 Thy1 no3-CTSB 488_LB509 568_MJFR14 647-CSTB_PBS- 5_c2.tif")
