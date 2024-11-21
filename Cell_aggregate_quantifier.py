@@ -1,6 +1,8 @@
 import cv2
 import numpy as np
 from skimage import measure, morphology, filters
+from skimage.segmentation import watershed
+from scipy import ndimage as ndi
 import matplotlib.pyplot as plt
 
 
@@ -18,16 +20,19 @@ def analyze_image(image_path):
     blue_cells_mask = morphology.remove_small_objects(blue_cells_mask, min_size=50)
     labeled_blue_cells, num_blue_cells = measure.label(blue_cells_mask, return_num=True)
 
-    # Detect red aggregates
-    red_threshold = filters.threshold_otsu(red_channel) * 1.2  # Slightly higher threshold for bright spots
+    # Enhanced detection for red aggregates
+    red_threshold = filters.threshold_otsu(red_channel) * 1.2
     red_aggregates_mask = red_channel > red_threshold
     red_aggregates_mask = morphology.remove_small_objects(red_aggregates_mask, min_size=5)
 
-    # Label and measure properties of red aggregates
-    labeled_red_aggregates = measure.label(red_aggregates_mask)
-    red_aggregates_props = measure.regionprops(labeled_red_aggregates, intensity_image=red_channel)
+    # Distance transform for watershed segmentation
+    distance = ndi.distance_transform_edt(red_aggregates_mask)
+    local_maxi = morphology.local_maxima(distance)
+    markers, _ = ndi.label(local_maxi)
+    labels = watershed(-distance, markers, mask=red_aggregates_mask)
 
-    # Count red aggregates and measure diameters
+    # Measure properties of red aggregates after watershed
+    red_aggregates_props = measure.regionprops(labels, intensity_image=red_channel)
     red_aggregates_diameters = [prop.equivalent_diameter for prop in red_aggregates_props]
     num_red_aggregates = len(red_aggregates_diameters)
 
@@ -53,6 +58,5 @@ def analyze_image(image_path):
     print("Diameters of red aggregates:", red_aggregates_diameters)
 
 
-# Run the analysis on  .tif image
+# Run the analysis on your .tif image
 analyze_image("path_to_image.tif")
-
