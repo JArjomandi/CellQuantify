@@ -1,9 +1,12 @@
 import cv2
 import numpy as np
+import os
+import pandas as pd
 from skimage import measure, morphology, filters
 from skimage.segmentation import watershed
 from scipy import ndimage as ndi
 import matplotlib.pyplot as plt
+
 
 def analyze_image(image_path):
     # Load image
@@ -32,10 +35,10 @@ def analyze_image(image_path):
 
     # Create a mask for red aggregates within the acceptable intensity range
     red_aggregates_mask = (
-        (red_channel >= min_red_intensity) &
-        (red_channel <= max_red_intensity) &
-        (red_channel > green_channel * 1.5) &
-        (red_channel > blue_channel * 1.5)
+            (red_channel >= min_red_intensity) &
+            (red_channel <= max_red_intensity) &
+            (red_channel > green_channel * 1.5) &
+            (red_channel > blue_channel * 1.5)
     )
 
     # Apply morphology to refine the mask
@@ -52,47 +55,51 @@ def analyze_image(image_path):
     red_aggregates_props = measure.regionprops(labels, intensity_image=red_channel)
 
     # Count remaining red aggregates and measure diameters
-    red_aggregates_diameters = [prop.equivalent_diameter for prop in red_aggregates_props]
-    num_red_aggregates = len(red_aggregates_diameters)
+    num_red_aggregates = len(red_aggregates_props)
 
     # Calculate total area of red aggregates
     total_red_area_pixels = np.sum([prop.area for prop in red_aggregates_props])
     total_red_area_percent = (total_red_area_pixels / image_area) * 100
 
-    # Plot the original image with detections
-    fig, ax = plt.subplots(figsize=(8, 8))
-    ax.imshow(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
+    # Collect the results for this image
+    results = {
+        "Image Name": os.path.basename(image_path),
+        "Number of Blue Cells": num_blue_cells,
+        "Total Blue Cell Area (pixels)": total_blue_area_pixels,
+        "Total Blue Cell Area (% of image)": total_blue_area_percent,
+        "Number of Red Aggregates": num_red_aggregates,
+        "Total Red Aggregate Area (pixels)": total_red_area_pixels,
+        "Total Red Aggregate Area (% of image)": total_red_area_percent
+    }
 
-    # Draw circles around each blue cell
-    for prop in blue_cells_props:
-        y, x = prop.centroid
-        diameter = prop.equivalent_diameter / 2
-        circle = plt.Circle((x, y), diameter, color='green', fill=False, linewidth=1)
-        ax.add_patch(circle)
+    return results
 
-    # Draw circles around each red aggregate
-    for prop in red_aggregates_props:
-        y, x = prop.centroid
-        diameter = prop.equivalent_diameter / 2
-        circle = plt.Circle((x, y), diameter, color='yellow', fill=False, linewidth=1)
-        ax.add_patch(circle)
 
-    # Display counts on the plot
-    ax.set_title(f"Blue cells: {num_blue_cells}, Red aggregates: {num_red_aggregates}")
-    plt.axis('off')
-    plt.show()
+def analyze_images_in_directory(directory_path, output_excel_path):
+    # List to store the results for each image
+    all_results = []
 
-    # Print results
-    print(f"Number of blue cells: {num_blue_cells}")
-    print(f"Total blue cell area (pixels): {total_blue_area_pixels}")
-    print(f"Total blue cell area (% of image): {total_blue_area_percent:.2f}%")
-    print(f"Number of red aggregates: {num_red_aggregates}")
-    print(f"Total red aggregate area (pixels): {total_red_area_pixels}")
-    print(f"Total red aggregate area (% of image): {total_red_area_percent:.2f}%")
-    print("Diameters of red aggregates:", red_aggregates_diameters)
+    # Find all .tif files in the given directory
+    for filename in os.listdir(directory_path):
+        if filename.endswith(".tif"):
+            image_path = os.path.join(directory_path, filename)
+            # Analyze the image and store the results
+            results = analyze_image(image_path)
+            all_results.append(results)
 
-# Run the analysis on your .tif images
-analyze_image("E:\\MSc\\FAU\\LESSONS masters\\Master Project\\MN lab training\\2024-10-09 Thy1 no3-CTSB 488_LB509 568_MJFR14 647-CSTB_PBS- 5_c2+4.tif")
-analyze_image("E:\\MSc\\FAU\\LESSONS masters\\Master Project\\MN lab training\\2024-10-09 Thy1 no4-CTSB 488_LB509 568_MJFR14 647-CSTB 2_c2+4.tif")
-analyze_image("E:\\MSc\\FAU\\LESSONS masters\\Master Project\\MN lab training\\2024-10-09 Thy1 no4-CTSB 488_LB509 568_MJFR14 647-CSTB 2_c2.tif")
-analyze_image("E:\\MSc\\FAU\\LESSONS masters\\Master Project\\MN lab training\\2024-10-09 Thy1 no3-CTSB 488_LB509 568_MJFR14 647-CSTB_PBS- 5_c2.tif")
+    # Create a DataFrame from the results
+    df = pd.DataFrame(all_results)
+
+    # Save the DataFrame to an Excel file
+    df.to_excel(output_excel_path, index=False)
+
+    print(f"Results saved to {output_excel_path}")
+
+
+if __name__ == "__main__":
+    # Define the directory path containing the images and the output Excel file path
+    directory_path = "E:\\MSc\\FAU\\LESSONS masters\\Master Project\\MN lab training\\"
+    output_excel_path = "analysis_results.xlsx"
+
+    # Analyze all images in the directory and save results to Excel
+    analyze_images_in_directory(directory_path, output_excel_path)
