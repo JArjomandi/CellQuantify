@@ -1,6 +1,6 @@
 import cv2
 import numpy as np
-from skimage import measure, morphology, filters
+from skimage import measure, morphology
 from skimage.segmentation import watershed
 from scipy import ndimage as ndi
 import matplotlib.pyplot as plt
@@ -11,9 +11,9 @@ def analyze_image(image_path):
     img = cv2.imread(image_path, cv2.IMREAD_COLOR)
 
     # Split the channels (assuming BGR format)
-    blue_channel = img[:, :, 0]  # Blue channel
-    green_channel = img[:, :, 1]  # Green channel
-    red_channel = img[:, :, 2]  # Red channel
+    blue_channel = img[:, :, 0]
+    green_channel = img[:, :, 1]
+    red_channel = img[:, :, 2]
 
     # Detect blue cells
     blue_threshold = filters.threshold_otsu(blue_channel)
@@ -21,15 +21,16 @@ def analyze_image(image_path):
     blue_cells_mask = morphology.remove_small_objects(blue_cells_mask, min_size=50)
     labeled_blue_cells, num_blue_cells = measure.label(blue_cells_mask, return_num=True)
 
-    # Define acceptable intensity range for red channel
-    min_red_intensity = 129  # Corresponding to #810000
-    max_red_intensity = 191  # Corresponding to #bf000a
+    # Define acceptable red intensity range around #bf0006
+    min_red_intensity = 150  # Lower bound
+    max_red_intensity = 255  # Upper bound for bright red tones
 
-    # Create a mask for red aggregates based on specific color criteria
+    # Create a mask for red aggregates within the acceptable intensity range
     red_aggregates_mask = (
-            (red_channel >= min_red_intensity) & (red_channel <= max_red_intensity) &  # Red intensity range
-            (red_channel > green_channel * 1.5) &  # Red significantly stronger than green
-            (red_channel > blue_channel * 1.5)  # Red significantly stronger than blue
+            (red_channel >= min_red_intensity) &
+            (red_channel <= max_red_intensity) &
+            (red_channel > green_channel * 1.5) &
+            (red_channel > blue_channel * 1.5)
     )
 
     # Apply morphology to refine the mask
