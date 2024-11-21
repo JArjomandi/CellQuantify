@@ -20,10 +20,17 @@ def analyze_image(image_path):
     blue_cells_mask = morphology.remove_small_objects(blue_cells_mask, min_size=50)
     labeled_blue_cells, num_blue_cells = measure.label(blue_cells_mask, return_num=True)
 
-    # Enhanced detection for red aggregates
-    red_threshold = filters.threshold_otsu(red_channel) * 1.2
-    red_aggregates_mask = (red_channel > red_threshold) & (red_channel > img[:, :, 1]) & (red_channel > img[:, :, 0])
-    red_aggregates_mask = morphology.remove_small_objects(red_aggregates_mask, min_size=10)
+    # Red aggregates detection with multi-threshold approach
+    # Apply a low threshold to ensure most aggregates are captured
+    red_low_threshold = filters.threshold_otsu(red_channel) * 0.8
+    red_aggregates_mask = red_channel > red_low_threshold
+
+    # Further refine the mask by ensuring redness dominance
+    red_aggregates_mask = (red_aggregates_mask & (red_channel > img[:, :, 1]) & (red_channel > img[:, :, 0]))
+
+    # Apply a series of erosions and dilations to separate close objects
+    red_aggregates_mask = morphology.binary_opening(red_aggregates_mask, morphology.disk(1))
+    red_aggregates_mask = morphology.binary_closing(red_aggregates_mask, morphology.disk(2))
 
     # Distance transform for watershed segmentation
     distance = ndi.distance_transform_edt(red_aggregates_mask)
@@ -34,15 +41,7 @@ def analyze_image(image_path):
     # Measure properties of red aggregates after watershed
     red_aggregates_props = measure.regionprops(labels, intensity_image=red_channel)
 
-    # Apply additional filtering based on size and intensity
-    min_intensity = 150  # Minimum intensity for a region to be considered
-    min_diameter = 2.0  # Minimum equivalent diameter for a valid aggregate
-    red_aggregates_props = [
-        prop for prop in red_aggregates_props
-        if prop.mean_intensity > min_intensity and prop.equivalent_diameter > min_diameter
-    ]
-
-    # Count remaining red aggregates and measure diameters
+    # Apply additional filtering based on intensity and size (if necessary)
     red_aggregates_diameters = [prop.equivalent_diameter for prop in red_aggregates_props]
     num_red_aggregates = len(red_aggregates_diameters)
 
