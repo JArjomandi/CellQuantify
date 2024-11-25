@@ -32,7 +32,7 @@ def analyze_image(image_path, pixel_size_um):
 
     # Existing analysis for DAPI nuclei blue cells
     blue_channel = img[:, :, 0]
-    if np.mean(blue_channel) < 10:  # Skip blue cell analysis if the mean intensity is too low (no signal)
+    if np.mean(blue_channel) < 5:  # Skip blue cell analysis if the mean intensity is too low (no signal)
         num_blue_cells = 0
         total_blue_area_pixels = 0
         total_blue_area_percent = 0
@@ -81,7 +81,6 @@ def analyze_image(image_path, pixel_size_um):
 
     # Collect results
     results = {
-        "Image Name": os.path.basename(image_path),
         "Number of Blue Cells": num_blue_cells,
         "Total Blue Cell Area (pixels)": total_blue_area_pixels,
         "Total Blue Cell Area (% of image)": total_blue_area_percent,
@@ -98,34 +97,39 @@ def analyze_image(image_path, pixel_size_um):
         "Total White/Gray Area (% of image)": total_white_gray_area_percent,
         "Average White/Gray Intensity": avg_white_gray_intensity,
     }
-
-    # Visualization of white/gray areas
-    overlay = img.copy()
-    overlay[white_gray_mask] = [0, 255, 255]  # Highlight white/gray pixels in yellow (BGR: [0, 255, 255])
-    cv2.imshow(f"White/Gray Intensity Visualization - {os.path.basename(image_path)}", overlay)
-    cv2.waitKey(0)
-    cv2.destroyAllWindows()
-
     return results
 
 
-def analyze_images_in_directory(directory_path, output_excel_path, pixel_size_um):
+def analyze_images_in_nested_folders(base_path, output_excel_path, pixel_size_um):
     all_results = []
 
-    for filename in os.listdir(directory_path):
-        if filename.endswith(".tif"):
-            image_path = os.path.join(directory_path, filename)
-            results = analyze_image(image_path, pixel_size_um)
-            all_results.append(results)
+    for root, _, files in os.walk(base_path):
+        for file in files:
+            if file.endswith(".tif"):
+                image_path = os.path.join(root, file)
+                # Get the relative path parts
+                relative_path = os.path.relpath(image_path, base_path)
+                path_parts = relative_path.split(os.sep)[:-1]  # Exclude the file name for folders
 
+                # Analyze the image and gather results
+                results = analyze_image(image_path, pixel_size_um)
+
+                # Add folder structure to results
+                folder_structure = {f"Folder Level {i+1}": part for i, part in enumerate(path_parts)}
+                folder_structure["Image Name"] = file
+                results = {**folder_structure, **results}
+
+                all_results.append(results)
+
+    # Convert results to a DataFrame and save to Excel
     df = pd.DataFrame(all_results)
     df.to_excel(output_excel_path, index=False)
     print(f"Results saved to {output_excel_path}")
 
 
 if __name__ == "__main__":
-    directory_path = "E:\\MSc\\FAU\\LESSONS masters\\Master Project\\MN lab training\\"
-    output_excel_path = "E:\\MSc\\FAU\\LESSONS masters\\Master Project\\MN lab training\\analysis_results.xlsx"
+    base_path = "E:\\MSc\\FAU\\LESSONS masters\\Master Project\\MN lab training\\Denise\\Thy1 d10"
+    output_excel_path = "E:\\MSc\\FAU\\LESSONS masters\\Master Project\\MN lab training\\Denise\\analysis_results.xlsx"
     pixel_size_um = 0.08  # Physical pixel size in micrometers
 
-    analyze_images_in_directory(directory_path, output_excel_path, pixel_size_um)
+    analyze_images_in_nested_folders(base_path, output_excel_path, pixel_size_um)
