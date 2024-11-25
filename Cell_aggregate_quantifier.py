@@ -16,33 +16,39 @@ def analyze_image(image_path, pixel_size_um):
     gray_image = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 
     # Define the white/gray intensity range
-    white_gray_intensity_range = [(28, 28, 28), (89, 89, 89)]  # Corresponding to #1c1c1c to #595959
-
-    # Create a mask for pixels within the white/gray intensity range
-    white_gray_mask = cv2.inRange(gray_image, white_gray_intensity_range[0][0], white_gray_intensity_range[1][0])
+    min_white_gray_intensity = 20  # Minimum intensity (#1c1c1c)
+    max_white_gray_intensity = 255  # Maximum intensity (#595959)
+    white_gray_mask = (gray_image >= min_white_gray_intensity) & (gray_image <= max_white_gray_intensity)
 
     # Calculate metrics for white/gray areas
-    total_white_gray_pixels = np.sum(white_gray_mask > 0)  # Count all pixels in the mask
+    total_white_gray_pixels = np.sum(white_gray_mask)  # Count all pixels in the mask
     total_white_gray_area_um2 = total_white_gray_pixels * (pixel_size_um ** 2)
     total_white_gray_area_mm2 = total_white_gray_area_um2 / 1e6
     total_white_gray_area_percent = (total_white_gray_pixels / image_area) * 100
 
     # Calculate average intensity of white/gray pixels
-    white_gray_intensity_values = gray_image[white_gray_mask > 0]
+    white_gray_intensity_values = gray_image[white_gray_mask]
     avg_white_gray_intensity = np.mean(white_gray_intensity_values) if white_gray_intensity_values.size > 0 else 0
 
-    # Existing analysis for blue cells
+    # Existing analysis for DAPI nuclei blue cells
     blue_channel = img[:, :, 0]
-    blue_threshold = filters.threshold_otsu(blue_channel)
-    blue_cells_mask = blue_channel > blue_threshold
-    blue_cells_mask = morphology.remove_small_objects(blue_cells_mask, min_size=60)
-    labeled_blue_cells, num_blue_cells = measure.label(blue_cells_mask, return_num=True)
-    blue_cells_props = measure.regionprops(labeled_blue_cells, intensity_image=blue_channel)
+    if np.mean(blue_channel) < 10:  # Skip blue cell analysis if the mean intensity is too low (no signal)
+        num_blue_cells = 0
+        total_blue_area_pixels = 0
+        total_blue_area_percent = 0
+        total_blue_area_um2 = 0
+        total_blue_area_mm2 = 0
+    else:
+        blue_threshold = filters.threshold_otsu(blue_channel)
+        blue_cells_mask = blue_channel > blue_threshold
+        blue_cells_mask = morphology.remove_small_objects(blue_cells_mask, min_size=60)
+        labeled_blue_cells, num_blue_cells = measure.label(blue_cells_mask, return_num=True)
+        blue_cells_props = measure.regionprops(labeled_blue_cells, intensity_image=blue_channel)
 
-    total_blue_area_pixels = np.sum([prop.area for prop in blue_cells_props])
-    total_blue_area_percent = (total_blue_area_pixels / image_area) * 100
-    total_blue_area_um2 = total_blue_area_pixels * (pixel_size_um ** 2)
-    total_blue_area_mm2 = total_blue_area_um2 / 1e6
+        total_blue_area_pixels = np.sum([prop.area for prop in blue_cells_props])
+        total_blue_area_percent = (total_blue_area_pixels / image_area) * 100
+        total_blue_area_um2 = total_blue_area_pixels * (pixel_size_um ** 2)
+        total_blue_area_mm2 = total_blue_area_um2 / 1e6
 
     # Existing analysis for red aggregates
     red_channel = img[:, :, 2]
@@ -92,6 +98,13 @@ def analyze_image(image_path, pixel_size_um):
         "Total White/Gray Area (% of image)": total_white_gray_area_percent,
         "Average White/Gray Intensity": avg_white_gray_intensity,
     }
+
+    # Visualization of white/gray areas
+    overlay = img.copy()
+    overlay[white_gray_mask] = [0, 255, 255]  # Highlight white/gray pixels in yellow (BGR: [0, 255, 255])
+    cv2.imshow(f"White/Gray Intensity Visualization - {os.path.basename(image_path)}", overlay)
+    cv2.waitKey(0)
+    cv2.destroyAllWindows()
 
     return results
 
