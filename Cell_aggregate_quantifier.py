@@ -16,12 +16,12 @@ def analyze_image(image_path, pixel_size_um):
     gray_image = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 
     # Define the white/gray intensity range
-    min_white_gray_intensity = 20  # Minimum intensity (#1c1c1c)
-    max_white_gray_intensity = 255  # Maximum intensity (#595959)
+    min_white_gray_intensity = 20
+    max_white_gray_intensity = 255
     white_gray_mask = (gray_image >= min_white_gray_intensity) & (gray_image <= max_white_gray_intensity)
 
     # Calculate metrics for white/gray areas
-    total_white_gray_pixels = np.sum(white_gray_mask)  # Count all pixels in the mask
+    total_white_gray_pixels = np.sum(white_gray_mask)
     total_white_gray_area_um2 = total_white_gray_pixels * (pixel_size_um ** 2)
     total_white_gray_area_mm2 = total_white_gray_area_um2 / 1e6
     total_white_gray_area_percent = (total_white_gray_pixels / image_area) * 100
@@ -30,18 +30,46 @@ def analyze_image(image_path, pixel_size_um):
     white_gray_intensity_values = gray_image[white_gray_mask]
     avg_white_gray_intensity = np.mean(white_gray_intensity_values) if white_gray_intensity_values.size > 0 else 0
 
-    # Existing analysis for DAPI nuclei blue cells
-    blue_channel = img[:, :, 0]
-    if np.mean(blue_channel) < 5:  # Skip blue cell analysis if the mean intensity is too low (no signal)
+    # Blue cell detection
+    # Blue cell detection with stricter criteria
+    # Blue cell detection
+    blue_channel = img[:, :, 0]  # Extract the blue channel
+    green_channel = img[:, :, 1]
+    red_channel = img[:, :, 2]
+
+    min_blue_intensity = 70  # Set a stricter minimum intensity for blue cells
+    max_blue_intensity = 255  # Keep maximum intensity as 255
+
+    # Create a mask for blue cells within the specified intensity range
+    blue_cells_mask = (
+            (blue_channel >= min_blue_intensity) &
+            (blue_channel <= max_blue_intensity) &
+            (blue_channel > green_channel * 1.5) &  # Blue must be 1.5x stronger than green
+            (blue_channel > red_channel * 1.5)  # Blue must be 1.5x stronger than red
+    )
+
+    # Apply morphological operations to clean up the mask
+    blue_cells_mask = morphology.binary_opening(blue_cells_mask, morphology.disk(2))  # Remove noise
+    blue_cells_mask = morphology.binary_closing(blue_cells_mask, morphology.disk(2))  # Fill small holes
+
+    # Filter out small objects (non-cell areas)
+    blue_cells_mask = morphology.remove_small_objects(blue_cells_mask, min_size=70)
+
+    # Check if there is a valid signal in the blue channel
+    background_intensity = np.median(blue_channel)  # Background noise level
+    peak_intensity = np.max(blue_channel[blue_cells_mask]) if np.any(blue_cells_mask) else 0
+
+    # Initialize blue_cells_props to avoid UnboundLocalError
+    blue_cells_props = []
+
+    # Only consider blue cells if peak intensity is significantly above the background
+    if peak_intensity - background_intensity < 60:  # SNR threshold
         num_blue_cells = 0
         total_blue_area_pixels = 0
         total_blue_area_percent = 0
         total_blue_area_um2 = 0
         total_blue_area_mm2 = 0
     else:
-        blue_threshold = filters.threshold_otsu(blue_channel)
-        blue_cells_mask = blue_channel > blue_threshold
-        blue_cells_mask = morphology.remove_small_objects(blue_cells_mask, min_size=60)
         labeled_blue_cells, num_blue_cells = measure.label(blue_cells_mask, return_num=True)
         blue_cells_props = measure.regionprops(labeled_blue_cells, intensity_image=blue_channel)
 
@@ -50,7 +78,7 @@ def analyze_image(image_path, pixel_size_um):
         total_blue_area_um2 = total_blue_area_pixels * (pixel_size_um ** 2)
         total_blue_area_mm2 = total_blue_area_um2 / 1e6
 
-    # Existing analysis for red aggregates
+    # Red aggregate analysis remains unchanged
     red_channel = img[:, :, 2]
     green_channel = img[:, :, 1]
     min_red_intensity = 100
@@ -79,6 +107,36 @@ def analyze_image(image_path, pixel_size_um):
     total_red_area_um2 = total_red_area_pixels * (pixel_size_um ** 2)
     total_red_area_mm2 = total_red_area_um2 / 1e6
 
+    # Visualization of the detected regions #######################################
+    overlay = img.copy()
+
+    # Apply a yellow semi-transparent mask for detected blue cells
+    blue_mask_overlay = np.zeros_like(img, dtype=np.uint8)
+    blue_mask_overlay[blue_cells_mask] = [0, 255, 255]  # Yellow mask for blue cells
+    overlay = cv2.addWeighted(overlay, 0.8, blue_mask_overlay, 0.5, 0)  # Blend with transparency
+
+    # Draw bright green circles around detected blue cells
+    for prop in blue_cells_props:
+        y, x = prop.centroid
+        radius = prop.equivalent_diameter / 2
+        cv2.circle(overlay, (int(x), int(y)), int(radius), (0, 255, 0), 2)  # Bright green circle
+
+    # Draw yellow circles around detected red aggregates
+    for prop in red_aggregates_props:
+        y, x = prop.centroid
+        radius = prop.equivalent_diameter / 2
+        cv2.circle(overlay, (int(x), int(y)), int(radius), (0, 255, 255), 2)  # Yellow circle for red aggregates
+
+    # Overlay white mask for detected white/gray intensity areas
+    white_mask_overlay = np.zeros_like(img, dtype=np.uint8)
+    white_mask_overlay[white_gray_mask] = [255, 255, 255]  # White mask for white/gray regions
+    overlay = cv2.addWeighted(overlay, 0.8, white_mask_overlay, 0.2, 0)  # Blend with transparency
+
+    # Show the visualization
+    cv2.imshow(f"Visualization - {os.path.basename(image_path)}", overlay)
+    cv2.waitKey(0)
+    cv2.destroyAllWindows()
+
     # Collect results
     results = {
         "Number of Blue Cells": num_blue_cells,
@@ -97,6 +155,7 @@ def analyze_image(image_path, pixel_size_um):
         "Total White/Gray Area (% of image)": total_white_gray_area_percent,
         "Average White/Gray Intensity": avg_white_gray_intensity,
     }
+
     return results
 
 
@@ -128,8 +187,10 @@ def analyze_images_in_nested_folders(base_path, output_excel_path, pixel_size_um
 
 
 if __name__ == "__main__":
-    base_path = "E:\\MSc\\FAU\\LESSONS masters\\Master Project\\MN lab training\\Denise\\Thy1 d10"
-    output_excel_path = "E:\\MSc\\FAU\\LESSONS masters\\Master Project\\MN lab training\\Denise\\analysis_results.xlsx"
+    #base_path = "E:\\MSc\\FAU\\LESSONS masters\\Master Project\\MN lab training\\Denise\\Thy1 d10"
+    base_path = "E:\MSc\FAU\LESSONS masters\Master Project\MN lab training"
+    #output_excel_path = "E:\\MSc\\FAU\\LESSONS masters\\Master Project\\MN lab training\\Denise\\analysis_results.xlsx"
+    output_excel_path = "E:\\MSc\\FAU\\LESSONS masters\\Master Project\\MN lab training\\Denise\\analysis_results_test.xlsx"
     pixel_size_um = 0.08  # Physical pixel size in micrometers
 
     analyze_images_in_nested_folders(base_path, output_excel_path, pixel_size_um)
