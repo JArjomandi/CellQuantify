@@ -2,8 +2,9 @@ import cv2
 import numpy as np
 import os
 import pandas as pd
-from skimage import measure, morphology, filters
+from skimage import measure, morphology, filters, segmentation
 from skimage.segmentation import watershed
+from scipy.ndimage import distance_transform_edt
 from scipy import ndimage as ndi
 
 
@@ -30,13 +31,12 @@ def analyze_image(image_path, pixel_size_um):
     white_gray_intensity_values = gray_image[white_gray_mask]
     avg_white_gray_intensity = np.mean(white_gray_intensity_values) if white_gray_intensity_values.size > 0 else 0
 
-    # Blue cell detection
-    # Blue cell detection with stricter criteria
-    # Blue cell detection
+    # Blue cell detection with stricter criteria to avoid over-segmentation
     blue_channel = img[:, :, 0]  # Extract the blue channel
     green_channel = img[:, :, 1]
     red_channel = img[:, :, 2]
 
+    # Blue cell detection with stricter criteria to avoid over-segmentation
     min_blue_intensity = 70  # Set a stricter minimum intensity for blue cells
     max_blue_intensity = 255  # Keep maximum intensity as 255
 
@@ -62,17 +62,31 @@ def analyze_image(image_path, pixel_size_um):
     # Initialize blue_cells_props to avoid UnboundLocalError
     blue_cells_props = []
 
-    # Only consider blue cells if peak intensity is significantly above the background
     if peak_intensity - background_intensity < 60:  # SNR threshold
+        # If the signal-to-noise ratio is too low, set results to zero
         num_blue_cells = 0
         total_blue_area_pixels = 0
         total_blue_area_percent = 0
         total_blue_area_um2 = 0
         total_blue_area_mm2 = 0
     else:
-        labeled_blue_cells, num_blue_cells = measure.label(blue_cells_mask, return_num=True)
+        # Perform distance transform
+        distance = distance_transform_edt(blue_cells_mask)
+
+        # Identify local maxima in the distance map
+        local_maxi = morphology.h_maxima(distance, h=10)
+
+        # Label maxima to use as markers
+        markers, _ = measure.label(local_maxi, return_num=True)
+
+        # Apply watershed segmentation to separate connected regions
+        labeled_blue_cells = segmentation.watershed(-distance, markers, mask=blue_cells_mask)
+
+        # Measure properties of the segmented blue cells
         blue_cells_props = measure.regionprops(labeled_blue_cells, intensity_image=blue_channel)
 
+        # Count and calculate areas
+        num_blue_cells = len(blue_cells_props)
         total_blue_area_pixels = np.sum([prop.area for prop in blue_cells_props])
         total_blue_area_percent = (total_blue_area_pixels / image_area) * 100
         total_blue_area_um2 = total_blue_area_pixels * (pixel_size_um ** 2)
@@ -132,8 +146,13 @@ def analyze_image(image_path, pixel_size_um):
     white_mask_overlay[white_gray_mask] = [255, 255, 255]  # White mask for white/gray regions
     overlay = cv2.addWeighted(overlay, 0.8, white_mask_overlay, 0.2, 0)  # Blend with transparency
 
-    # Show the visualization
-    cv2.imshow(f"Visualization - {os.path.basename(image_path)}", overlay)
+    # Resize the visualization for better screen fit
+    window_width = 500  # Desired window width
+    window_height = 400  # Desired window height
+    overlay_resized = cv2.resize(overlay, (window_width, window_height))
+
+    # Show the resized visualization
+    cv2.imshow(f"Visualization - {os.path.basename(image_path)}", overlay_resized)
     cv2.waitKey(0)
     cv2.destroyAllWindows()
 
