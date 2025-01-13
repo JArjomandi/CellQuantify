@@ -99,3 +99,4 @@ Preprocessing steps:
 ---
 
 This pipeline enabled reproducible and accurate quantification of nuclei and α-Synuclein aggregates in wildtype and α-Synuclein-overexpressing mice subjected to Cathepsin treatments.
+![Sample Image](samples.png)
