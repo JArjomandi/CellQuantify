@@ -100,3 +100,81 @@ Preprocessing steps:
 
 This pipeline enabled reproducible and accurate quantification of nuclei and α-Synuclein aggregates in wildtype and α-Synuclein-overexpressing mice subjected to Cathepsin treatments.
 ![Sample Image](samples.png)
+
+--------------------------------------------
+# 🧪 Image Segmentation Utilities
+
+This repository contains Python utilities for performing image segmentation and analysis using OpenCV, NumPy, SciPy, and scikit-image.
+
+---
+
+## ✅ Requirements
+
+The code depends on the following Python libraries:
+
+- `opencv-python`
+- `numpy`
+- `pandas`
+- `scikit-image`
+- `scipy`
+
+These are listed in the `requirements.txt` file provided in this repo.
+
+---
+
+## 🚀 Getting Started (Beginner-Friendly Setup)
+
+This guide is for **complete beginners** who want to run this code using **Python and PyCharm**.
+
+---
+
+### 1️⃣ Install Python 🐍
+
+- Download Python: [https://www.python.org/downloads/](https://www.python.org/downloads/)
+- During installation, **make sure to check this box**:  
+  ✅ *"Add Python to PATH"*
+
+---
+
+### 2️⃣ Install PyCharm 💡
+
+- Download PyCharm (Community Edition is free):  
+  [https://www.jetbrains.com/pycharm/download/](https://www.jetbrains.com/pycharm/download/)
+
+---
+
+### 3️⃣ Open the Project in PyCharm
+
+1. Open PyCharm
+2. Click **"Open"**
+3. Select the folder where you downloaded or cloned this repository
+
+---
+
+### 4️⃣ Set Up a Virtual Environment in PyCharm
+
+1. Go to  
+   **File > Settings > Project: YourProjectName > Python Interpreter**
+2. Click the ⚙️ gear icon and choose **Add**
+3. Select **Virtualenv Environment**
+4. Click **OK** to create a clean environment for the project
+
+---
+
+### 5️⃣ Install Required Python Packages
+
+1. Open the **Terminal** in PyCharm (bottom of the screen)
+2. Run this command:
+
+```bash
+pip install -r requirements.txt
+```
+
+---
+## ▶️ Running the Code
+
+- Open the Python script (.py) you want to run
+- Set required paths
+- Click the green **▶️ Run** button in the top right of PyCharm
+
+
